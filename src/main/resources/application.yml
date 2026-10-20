@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: insights-api
+  datasource:
+    url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/insights}
+    username: ${CLICKHOUSE_USER:insights}
+    password: ${CLICKHOUSE_PASSWORD:insights}
+    driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 3000      # fail fast rather than queue requests behind a slow store
+      pool-name: clickhouse
+  cache:
+    type: caffeine
+    cache-names: metrics
+    caffeine:
+      # Short TTL: today's numbers change constantly. Closed days could be cached far longer (see README).
+      spec: maximumSize=10000,expireAfterWrite=30s,recordStats
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+  shutdown: graceful                # finish in-flight requests on deploy / scale-in
+
+insights:
+  security:
+    jwt:
+      issuer-uri: ${JWT_ISSUER_URI:}
+      hmac-secret: ${JWT_HMAC_SECRET:}
+  rate-limit:
+    capacity: 50                    # burst per tenant, per instance
+    refill-per-second: 20
+  query:
+    default-range-days: 7
+    max-range-days: 400             # about 13 months, matching reconciled retention
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true               # /actuator/health/liveness and /readiness for Kubernetes
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
